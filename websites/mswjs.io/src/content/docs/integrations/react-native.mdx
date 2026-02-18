@@ -100,22 +100,9 @@ For end-to-end testing, make sure you have [Enabled MSW in development](#develop
 
 ### Expo Router navigation is broken
 
-**Reason:** MSW's `msw/native` uses `XMLHttpRequestInterceptor`, which globally patches the `XMLHttpRequest` class at the JavaScript runtime level. Expo Router relies on `XMLHttpRequest` or `fetch` internally for navigation mechanics (e.g. loading route metadata, async route resolution). This global patching can interfere with those internal requests even when `onUnhandledRequest: 'bypass'` is set, because the patching itself—not the mocking—is what causes the interference.
+**Reason:** MSW's `msw/native` uses `XMLHttpRequestInterceptor`, which replaces the methods on the global `XMLHttpRequest.prototype` (e.g. `open`, `send`) at the JavaScript runtime level. Every `XMLHttpRequest` call in the app — including Expo Router's internal navigation requests — goes through the patched prototype regardless of whether any handler matches. Scoping handlers to specific origins does not help, because the interference is caused by the patching itself, not by request matching.
 
-**Solution:** Scope your request handlers strictly to specific external API origins and avoid catch-all URL patterns. This prevents MSW from matching (and potentially disrupting) Expo Router's internal requests.
-
-```js
-// src/mocks/handlers.js
-import { http } from 'msw'
-
-export const handlers = [
-  // Only intercept specific external API domains.
-  http.get('https://api.example.com/*', () => { /* ... */ }),
-  http.post('https://api.example.com/*', () => { /* ... */ }),
-]
-```
-
-If scoping the handlers does not resolve the issue, initialize MSW before Expo Router's navigation tree mounts. Use a `useState` flag to hold off rendering `<Stack />` until MSW is ready, so none of Expo Router's internal requests escape before the interceptor is in place:
+**Solution:** Initialize MSW before Expo Router's navigation tree mounts. Use a `useState` flag to hold off rendering `<Stack />` until MSW is ready, so none of Expo Router's internal `XMLHttpRequest` calls occur before the patched prototype is in its final, stable state:
 
 ```tsx
 // app/_layout.tsx
@@ -147,7 +134,7 @@ export default function RootLayout() {
 }
 ```
 
-> By returning `null` until `isMockingEnabled` is `true`, Expo Router's navigation tree — and all its internal `XMLHttpRequest` calls — only start after MSW is fully set up.
+> By returning `null` until `isMockingEnabled` is `true`, Expo Router's navigation tree — and all its internal `XMLHttpRequest` calls — only start after MSW has finished patching `XMLHttpRequest.prototype`.
 
 ### Unable to resolve module `http`
 
