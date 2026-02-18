@@ -115,27 +115,30 @@ export const handlers = [
 ]
 ```
 
-If scoping the handlers does not resolve the issue, you can conditionally start the server only after the initial navigation is complete:
+If scoping the handlers does not resolve the issue, you can defer starting the server until after Expo Router has completed its initial navigation. Do this by initializing MSW inside a `useEffect` in your root layout:
 
-```js {6-16}
-// index.js
-import { AppRegistry } from 'react-native'
-import App from './src/App'
-import { name as appName } from './app.json'
+```tsx
+// app/_layout.tsx
+import { useEffect } from 'react'
+import { Stack } from 'expo-router'
 
-async function enableMocking() {
-  if (!__DEV__) {
-    return
-  }
+export default function RootLayout() {
+  useEffect(() => {
+    async function enableMocking() {
+      if (!__DEV__) {
+        return
+      }
 
-  await import('./msw.polyfills')
-  const { server } = await import('./src/mocks/server')
-  server.listen({ onUnhandledRequest: 'bypass' })
+      await import('../msw.polyfills')
+      const { server } = await import('../src/mocks/server')
+      server.listen({ onUnhandledRequest: 'bypass' })
+    }
+
+    enableMocking()
+  }, [])
+
+  return <Stack />
 }
-
-enableMocking().then(() => {
-  AppRegistry.registerComponent(appName, () => App)
-})
 ```
 
 ### Unable to resolve module `http`
