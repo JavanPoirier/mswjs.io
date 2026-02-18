@@ -115,31 +115,39 @@ export const handlers = [
 ]
 ```
 
-If scoping the handlers does not resolve the issue, you can defer starting the server until after Expo Router has completed its initial navigation. Do this by initializing MSW inside a `useEffect` in your root layout:
+If scoping the handlers does not resolve the issue, initialize MSW before Expo Router's navigation tree mounts. Use a `useState` flag to hold off rendering `<Stack />` until MSW is ready, so none of Expo Router's internal requests escape before the interceptor is in place:
 
 ```tsx
 // app/_layout.tsx
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Stack } from 'expo-router'
 
+async function enableMocking() {
+  if (!__DEV__) {
+    return
+  }
+
+  await import('../msw.polyfills')
+  const { server } = await import('../src/mocks/server')
+  server.listen({ onUnhandledRequest: 'bypass' })
+}
+
 export default function RootLayout() {
+  const [isMockingEnabled, setIsMockingEnabled] = useState(!__DEV__)
+
   useEffect(() => {
-    async function enableMocking() {
-      if (!__DEV__) {
-        return
-      }
-
-      await import('../msw.polyfills')
-      const { server } = await import('../src/mocks/server')
-      server.listen({ onUnhandledRequest: 'bypass' })
-    }
-
-    enableMocking()
+    enableMocking().then(() => setIsMockingEnabled(true))
   }, [])
+
+  if (!isMockingEnabled) {
+    return null
+  }
 
   return <Stack />
 }
 ```
+
+> By returning `null` until `isMockingEnabled` is `true`, Expo Router's navigation tree — and all its internal `XMLHttpRequest` calls — only start after MSW is fully set up.
 
 ### Unable to resolve module `http`
 
