@@ -98,6 +98,46 @@ For end-to-end testing, make sure you have [Enabled MSW in development](#develop
 
 ## Common issues
 
+### Expo Router navigation is broken
+
+**Reason:** MSW's `msw/native` uses `XMLHttpRequestInterceptor`, which globally patches the `XMLHttpRequest` class at the JavaScript runtime level. Expo Router relies on `XMLHttpRequest` or `fetch` internally for navigation mechanics (e.g. loading route metadata, async route resolution). This global patching can interfere with those internal requests even when `onUnhandledRequest: 'bypass'` is set, because the patching itself—not the mocking—is what causes the interference.
+
+**Solution:** Scope your request handlers strictly to specific external API origins and avoid catch-all URL patterns. This prevents MSW from matching (and potentially disrupting) Expo Router's internal requests.
+
+```js
+// src/mocks/handlers.js
+import { http } from 'msw'
+
+export const handlers = [
+  // Only intercept specific external API domains.
+  http.get('https://api.example.com/*', () => { /* ... */ }),
+  http.post('https://api.example.com/*', () => { /* ... */ }),
+]
+```
+
+If scoping the handlers does not resolve the issue, you can conditionally start the server only after the initial navigation is complete:
+
+```js {6-16}
+// index.js
+import { AppRegistry } from 'react-native'
+import App from './src/App'
+import { name as appName } from './app.json'
+
+async function enableMocking() {
+  if (!__DEV__) {
+    return
+  }
+
+  await import('./msw.polyfills')
+  const { server } = await import('./src/mocks/server')
+  server.listen({ onUnhandledRequest: 'bypass' })
+}
+
+enableMocking().then(() => {
+  AppRegistry.registerComponent(appName, () => App)
+})
+```
+
 ### Unable to resolve module `http`
 
 **Reason:** Your React Native code ends up importing the `http` module that doesn't exist in React Native.
