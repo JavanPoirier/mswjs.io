@@ -74,6 +74,22 @@ Import `server` in the entrypoint of your React Native application and call `ser
   and only enable it in tests or custom builds where routing is not required.
 </Warning>
 
+Expo Router fetches loader data via `fetch('/_expo/loaders/*')` (see
+[`packages/expo-router/src/loaders/utils.ts`](https://github.com/expo/expo/blob/main/packages/expo-router/src/loaders/utils.ts)).
+Those requests run through React Native's XHR stack, so MSW's XHR interceptor
+will capture them. If you still need MSW at runtime, explicitly passthrough the
+internal loader requests:
+
+```js /_expo\/loaders/
+import { http, passthrough } from 'msw'
+import { setupServer } from 'msw/native'
+
+export const server = setupServer(
+  http.get('/_expo/loaders/:path*', () => passthrough()),
+  ...handlers
+)
+```
+
 ```js {6-16} /enableMocking/
 // index.js
 import { AppRegistry } from 'react-native'
