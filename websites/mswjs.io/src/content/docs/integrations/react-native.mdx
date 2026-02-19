@@ -67,7 +67,30 @@ export const server = setupServer(...handlers)
 
 Import `server` in the entrypoint of your React Native application and call `server.listen()` _conditionally_.
 
-```js {6-14} /enableMocking/
+<Warning>
+  MSW patches `XMLHttpRequest` in React Native. Expo Router relies on XHR for
+  internal navigation, so the patch can still break links even if you start MSW
+  in the background. If you use Expo Router, keep MSW disabled in the runtime
+  and only enable it in tests or custom builds where routing is not required.
+</Warning>
+
+Expo Router fetches loader data via `fetch('/_expo/loaders/*')` (see
+[`packages/expo-router/src/loaders/utils.ts`](https://github.com/expo/expo/blob/main/packages/expo-router/src/loaders/utils.ts)).
+Those requests run through React Native's XHR stack, so MSW's XHR interceptor
+will capture them. If you still need MSW at runtime, explicitly passthrough the
+internal loader requests:
+
+```js /_expo\/loaders/
+import { http, passthrough } from 'msw'
+import { setupServer } from 'msw/native'
+
+export const server = setupServer(
+  http.get('/_expo/loaders/:path*', () => passthrough()),
+  ...handlers
+)
+```
+
+```js {6-16} /enableMocking/
 // index.js
 import { AppRegistry } from 'react-native'
 import App from './src/App'
@@ -83,9 +106,11 @@ async function enableMocking() {
   server.listen()
 }
 
-enableMocking().then(() => {
-  AppRegistry.registerComponent(appName, () => App)
-})
+if (__DEV__) {
+  enableMocking().catch(console.error)
+}
+
+AppRegistry.registerComponent(appName, () => App)
 ```
 
 > Don't forget to import the `msw.polyfills.js` module!
