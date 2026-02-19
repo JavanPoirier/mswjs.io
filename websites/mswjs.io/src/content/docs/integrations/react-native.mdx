@@ -68,10 +68,10 @@ export const server = setupServer(...handlers)
 Import `server` in the entrypoint of your React Native application and call `server.listen()` _conditionally_.
 
 <Warning>
-  MSW patches `XMLHttpRequest` in React Native. If you use Expo Router (or any
-  runtime that relies on internal XHR-based navigation), register the root
-  component synchronously and start MSW in the background instead of awaiting
-  `enableMocking()`.
+  MSW patches `XMLHttpRequest` in React Native. Expo Router relies on XHR for
+  internal navigation, so the patch can still break links even if you start MSW
+  in the background. If you use Expo Router, keep MSW disabled in the runtime
+  and only enable it in tests or custom builds where routing is not required.
 </Warning>
 
 ```js {6-16} /enableMocking/
