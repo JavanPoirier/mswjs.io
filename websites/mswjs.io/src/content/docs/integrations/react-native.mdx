@@ -91,7 +91,7 @@ async function enableMocking() {
 }
 
 if (__DEV__) {
-  void enableMocking()
+  enableMocking().catch(console.error)
 }
 
 AppRegistry.registerComponent(appName, () => App)
