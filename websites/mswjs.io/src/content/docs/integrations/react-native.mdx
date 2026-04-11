@@ -25,7 +25,7 @@ In React Native, MSW works similarly to Node.js, but omits certain request inter
 
 ### Polyfills
 
-MSW relies on standard JavaScript classes that are not present in React Native, like `URL`. Please install the polyfills below to guarantee proper MSW execution in React Native.
+MSW relies on standard JavaScript classes that are not present in React Native, like `URL` and `MessageEvent`. Please install the polyfills below to guarantee proper MSW execution in React Native.
 
 ```sh
 npm install react-native-url-polyfill fast-text-encoding
@@ -38,6 +38,8 @@ Create a new `msw.polyfills.js` file with the following content:
 import 'fast-text-encoding'
 import 'react-native-url-polyfill/auto'
 ```
+
+> If your React Native environment does not provide globals like `MessageEvent`, `Event`, `EventTarget`, or `BroadcastChannel`, you may need to add manual shims for them. Make sure that the `Event` polyfill includes standard methods like `stopPropagation()` and `stopImmediatePropagation()`, as MSW relies on them internally.
 
 We will import this file later, when [Enabling mocking](#enable-mocking).
 
@@ -107,4 +109,51 @@ For end-to-end testing, make sure you have [Enabled MSW in development](#develop
 ```diff /native/
 -import { setupServer } from 'msw/node'
 +import { setupServer } from 'msw/native'
+```
+
+### TypeError: new Proxy target must be an Object
+
+**Reason:** Starting from MSW 2.13.0, the library uses the `rettime` event emitter internally. Versions of `rettime` prior to 0.11.0 create a `Proxy` on `event.stopPropagation`, which crashes on React Native (Hermes) if the `Event` polyfill does not define `stopPropagation` as a function.
+
+This typically manifests as:
+
+```
+TypeError: new Proxy target must be an Object
+    at Proxy (native)
+    at _proxyEvent2 (...)
+```
+
+**Solution:** Ensure that your `Event` polyfill includes a `stopPropagation` method. Add the following to your `msw.polyfills.js` file _before_ the other polyfills:
+
+```js
+// msw.polyfills.js
+if (typeof Event !== 'undefined' && !Event.prototype.stopPropagation) {
+  Event.prototype.stopPropagation = function () {}
+}
+if (typeof Event !== 'undefined' && !Event.prototype.stopImmediatePropagation) {
+  Event.prototype.stopImmediatePropagation = function () {}
+}
+
+import 'fast-text-encoding'
+import 'react-native-url-polyfill/auto'
+```
+
+Alternatively, you can force a newer version of `rettime` that does not use `Proxy` for event handling. Add a `resolutions` (Yarn) or `overrides` (npm) field in your `package.json`:
+
+```json
+// package.json (Yarn)
+{
+  "resolutions": {
+    "rettime": "^0.11.0"
+  }
+}
+```
+
+```json
+// package.json (npm)
+{
+  "overrides": {
+    "rettime": "^0.11.0"
+  }
+}
 ```
